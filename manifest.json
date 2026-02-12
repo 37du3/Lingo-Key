@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Tran",
+  "version": "1.0.0",
+  "description": "Translate text in input fields using LLM",
+  "permissions": ["storage"],
+  "commands": {
+    "trigger-translate": {
+      "suggested_key": {
+        "default": "Alt+T",
+        "mac": "Ctrl+Shift+T"
+      },
+      "description": "Translate text in current input field"
+    }
+  },
+  "background": {
+    "service_worker": "src/background/service-worker.ts"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/index.ts"]
+    }
+  ],
+  "options_page": "src/options/options.html"
+}
