@@ -1,7 +1,7 @@
 # Tran Chrome Extension - Progress Tracker
 
-**Last Updated:** 2026-02-12 22:25
-**Current Status:** Batch 1 Complete (Tasks 1-4, 7) | Batch 2 In Progress (Task 5 started)
+**Last Updated:** 2026-02-13 09:45
+**Current Status:** Core Implementation Complete (Tasks 1-8) | Ready for Manual Testing (Tasks 9-10)
 
 ---
 
@@ -125,79 +125,122 @@
 - Handles `{ type: "open-options" }` message from content script
 - Calls `browser.runtime.openOptionsPage()`
 
+### Task 5: Content Script — Overlay & Toast
+**Status:** ✅ Complete
+**Commit:** `8b2dd26` - "feat: overlay and toast UI components"
+
+**What was done:**
+- Created `src/content/overlay.ts` with:
+  - `showOverlay()` - displays floating "✨ Translating..." indicator
+  - `removeOverlay()` - removes overlay
+  - `positionOverlay()` - anchors overlay to input element with viewport collision detection
+- Created `src/content/toast.ts` with:
+  - `showToast()` - displays error toast with optional click handler
+  - Auto-dismiss after 3 seconds
+  - Clickable for "no API key" errors to navigate to options page
+
+**Key implementation details:**
+- Overlay: fixed position, z-index 2147483647, dark theme (#1a1a2e)
+- Toast: bottom-right corner, red background (#dc3545), smooth fade-out transition
+- Viewport collision detection prevents overlay from going off-screen
+
 ---
 
-## In Progress 🚧
+### Task 6: Content Script — Main Orchestration
+**Status:** ✅ Complete
+**Commit:** `df185aa` - "feat: content script orchestration with interrupt and rollback"
 
-### Task 5: Content Script — Overlay & Toast
-**Status:** 🚧 In Progress (just started)
-**Next steps:**
-1. Create `src/content/overlay.ts` - floating "✨ Translating..." indicator
-2. Create `src/content/toast.ts` - error toast with optional click handler
-3. Verify build
-4. Commit
+**What was done:**
+- Rewrote `src/content/index.ts` with full orchestration:
+  - Listens for `trigger-translate` message from service worker
+  - Detects active input element (input/textarea/contenteditable, excludes password fields)
+  - Loads config and checks API key (shows clickable toast if missing)
+  - Extracts text using `getTextRange()` or `getContentEditableText()`
+  - Creates snapshot for rollback
+  - Shows overlay during translation
+  - Connects port to service worker
+  - Handles streaming chunks with 80ms throttle
+  - Applies replacement using `replaceInputText()` or `replaceContentEditableText()`
+  - Handles errors with toast notifications and rollback
+  - Handles interrupts (shortcut pressed again, user input during translation)
+  - Tracks composition events (Chinese IME) to avoid false interrupts
+  - Fallback: shows copy-to-clipboard panel if contenteditable replacement fails
 
-**Implementation details (from plan):**
-- Overlay: fixed position, z-index 2147483647, viewport collision detection
-- Toast: bottom-right, auto-dismiss after 3s, clickable for "no API key" errors
+**Key implementation details:**
+- Global state: `isTranslating`, `activePort`, `snapshot`, `isComposing`
+- Composition event tracking prevents false interrupts during IME input
+- Throttled DOM updates (80ms) prevent UI freezing
+- Rollback restores original text on error or interrupt
+- Copy fallback panel for complex contenteditable elements
+
+---
+
+### Task 8: Options Page
+**Status:** ✅ Complete
+**Commit:** `b2b0f63` - "feat: options page with API config, translation settings, and quick start"
+
+**What was done:**
+- Rewrote `src/options/options.html` with full UI:
+  - Quick Start card with links to OpenAI/DeepSeek and privacy note
+  - API Configuration section (base URL, API key with show/hide toggle, model, test connection button)
+  - Translation section (target language dropdown, prompt style dropdown, custom prompt textarea, max chars input)
+  - Shortcut section with link to chrome://extensions/shortcuts
+- Rewrote `src/options/options.ts` with:
+  - Loads config on init and populates form fields
+  - Auto-save on change (no save button needed)
+  - Prompt style preset switching
+  - API key visibility toggle
+  - Test connection button (sends test request to API)
+  - Hides quick start card if API key already configured
+- Rewrote `src/options/options.css` with full styling:
+  - Clean card-based layout
+  - Responsive design
+  - Color-coded feedback (green for success, red for errors)
+
+**Key features:**
+- Auto-save with visual feedback ("✓ Saved" → "Settings auto-saved")
+- Test connection validates API key and shows status
+- URL normalization on save (removes trailing slashes, adds /v1)
+- Privacy note: "Your data is sent directly to the API you configure. No intermediate servers."
 
 ---
 
 ## Remaining Tasks 📋
 
-### Task 6: Content Script — Main Orchestration
-**Status:** ⏳ Pending (blocked by Task 5)
-**Estimated complexity:** High (core orchestration logic)
+### Task 9: E2E Manual Testing
+**Status:** ⏳ Pending (ready to start)
 
 **What needs to be done:**
-- Create `src/content/index.ts` with full orchestration:
-  - Listen for `trigger-translate` message from service worker
-  - Detect active input element (input/textarea/contenteditable, exclude password)
-  - Load config, check API key (show clickable toast if missing)
-  - Extract text using `getTextRange()` or `getContentEditableText()`
-  - Create snapshot for rollback
-  - Show overlay
-  - Connect port to service worker
-  - Handle streaming chunks with 80ms throttle
-  - Apply replacement using `replaceInputText()` or `replaceContentEditableText()`
-  - Handle errors (show toast, rollback)
-  - Handle interrupts (shortcut pressed again, user input during translation)
-  - Track composition events (Chinese IME) to avoid false interrupts
-  - Fallback: show copy-to-clipboard panel if contenteditable replacement fails
-
-**Key complexity:**
-- Interrupt handling (both shortcut and user input)
-- Rollback mechanism (restore original text)
-- Composition event tracking (`compositionstart`/`compositionend`)
-- Throttled DOM updates
-- contenteditable fallback panel
+- Build extension: `npx vite build`
+- Load unpacked in Chrome from `dist/` folder
+- Verify FTUE (options page opens on install)
+- Configure API and test connection
+- Test translation on textarea (GitHub issue comment)
+- Test interrupt via shortcut (press Alt+T again during translation)
+- Test interrupt via user input (type during translation)
+- Test Ctrl+Z undo
+- Test error handling (invalid API key)
+- Test password field protection (nothing happens)
 
 ---
 
-### Task 8: Options Page
-**Status:** ⏳ Pending (blocked by Task 2 - now unblocked)
+### Task 10: Compatibility Testing
+**Status:** ⏳ Pending (blocked by Task 9)
 
-**What needs to be done:**
-- Rewrite `src/options/options.html` with full UI:
-  - Quick Start card (links to OpenAI/DeepSeek, privacy note)
-  - API Configuration section (base URL, API key with show/hide, model, test connection)
-  - Translation section (target language dropdown, prompt style dropdown, custom prompt textarea, max chars input)
-  - Shortcut section (link to chrome://extensions/shortcuts)
-- Rewrite `src/options/options.ts` with:
-  - Load config on init
-  - Populate form fields
-  - Auto-save on change
-  - Prompt style preset switching
-  - API key visibility toggle
-  - Test connection button (sends test request to API)
-  - Hide quick start card if API key already configured
-- Rewrite `src/options/options.css` with full styling
+**Sites to test:**
+- GitHub (issue comment - textarea)
+- GitHub (PR review - contenteditable)
+- Stack Overflow (answer - textarea)
+- Gmail (compose - contenteditable)
+- Outlook Web (compose - contenteditable)
+- Slack Web (message - contenteditable)
 
-**Key features:**
-- Auto-save (no save button needed)
-- Test connection validates API key
-- URL normalization on save
-- Privacy note: "Your data is sent directly to the API you configure. No intermediate servers."
+**For each site:**
+- Trigger translation
+- Verify streaming replacement
+- Verify undo (Ctrl+Z)
+- Verify interrupt
+- If contenteditable fails → verify copy-fallback panel appears
 
 ---
 
@@ -245,8 +288,6 @@
 ├── docs/
 │   ├── plans/
 │   │   ├── 2026-02-12-tran-chrome-extension-design.md
-│   │   ├── 2026-02-12-tran-chrome-extension-design-review.md
-│   │   ├── 2026-02-12-tran-chrome-extension-prd-v2.md
 │   │   ├── 2026-02-12-tran-implementation-plan.md
 │   │   └── progress_tracker.md (this file)
 │   └── CLAUDE.md
@@ -255,14 +296,14 @@
 │   │   ├── api-client.ts ✅
 │   │   └── service-worker.ts ✅
 │   ├── content/
-│   │   ├── index.ts (placeholder, needs Task 6)
+│   │   ├── index.ts ✅
 │   │   ├── replacer.ts ✅
-│   │   ├── overlay.ts (needs Task 5)
-│   │   └── toast.ts (needs Task 5)
+│   │   ├── overlay.ts ✅
+│   │   └── toast.ts ✅
 │   ├── options/
-│   │   ├── options.html (placeholder, needs Task 8)
-│   │   ├── options.ts (placeholder, needs Task 8)
-│   │   └── options.css (placeholder, needs Task 8)
+│   │   ├── options.html ✅
+│   │   ├── options.ts ✅
+│   │   └── options.css ✅
 │   └── shared/
 │       ├── types.ts ✅
 │       ├── constants.ts ✅
@@ -306,6 +347,9 @@ npx vite build  # All builds succeed ✅
 ## Git History
 
 ```
+b2b0f63 feat: options page with API config, translation settings, and quick start (Task 8)
+df185aa feat: content script orchestration with interrupt and rollback (Task 6)
+8b2dd26 feat: overlay and toast UI components (Task 5)
 1274227 feat: text extraction and replacement logic (Task 4)
 ef27d3a feat: service worker with streaming API client and command routing (Tasks 3+7)
 211ed8c feat: shared types, constants, and storage layer (Task 2)
@@ -314,22 +358,23 @@ ef27d3a feat: service worker with streaming API client and command routing (Task
 
 ---
 
-## Next Steps for New Session
+## Next Steps for Manual Testing
 
-**Immediate next task:** Complete Task 5 (Overlay & Toast)
+**Immediate next task:** Task 9 - E2E Manual Testing
 
-1. Create `src/content/overlay.ts` (floating "✨ Translating..." indicator)
-2. Create `src/content/toast.ts` (error toast UI)
-3. Verify build
-4. Commit Task 5
+1. Build the extension: `npx vite build`
+2. Load unpacked in Chrome:
+   - Open `chrome://extensions/`
+   - Enable "Developer mode" (top right)
+   - Click "Load unpacked"
+   - Select the `dist/` folder
+3. Options page should open automatically (first-time setup)
+4. Configure API settings and test connection
+5. Test translation on various websites and input elements
+6. Verify interrupt handling and rollback
+7. Test undo (Ctrl+Z / Cmd+Z)
 
-**Then proceed to:**
-- Task 6: Content Script Main Orchestration (the big one - core translation flow)
-- Task 8: Options Page (full settings UI)
-- Task 9: E2E Manual Testing
-- Task 10: Compatibility Testing
-
-**To resume:**
+**To resume development:**
 ```bash
 cd /Users/yangming/code/tran
 git log --oneline  # Check current state
