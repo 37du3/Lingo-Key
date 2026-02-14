@@ -65,7 +65,7 @@ export async function* streamTranslation(
 
     for (const line of lines) {
       const content = parseSSEChunk(line);
-      if (content !== null) {
+      if (content !== null && content !== "") {
         accumulated += content;
         yield accumulated;
       }

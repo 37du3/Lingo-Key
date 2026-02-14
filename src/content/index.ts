@@ -3,7 +3,8 @@ import { loadConfig } from "../shared/storage";
 import { PORT_NAME, THROTTLE_MS } from "../shared/constants";
 import {
   getTextRange, replaceInputText,
-  getContentEditableText, replaceContentEditableText,
+  getContentEditableText,
+  attemptContentEditableReplacement,
   type TextRange,
 } from "./replacer";
 import { showOverlay, removeOverlay } from "./overlay";
@@ -14,33 +15,48 @@ let isTranslating = false;
 let activePort: browser.Runtime.Port | null = null;
 let snapshot: { element: HTMLElement; text: string; range: any } | null = null;
 let isComposing = false;
+let isApplyingReplacement = false;
 
 // Track composition events globally
 document.addEventListener("compositionstart", () => { isComposing = true; });
 document.addEventListener("compositionend", () => { isComposing = false; });
 
+console.log("[Tran] Content script loaded on:", window.location.href);
+
 // Listen for translate command from service worker
 browser.runtime.onMessage.addListener((msg: any) => {
+  console.log("[Tran] Message received:", msg);
   if (msg.type === "trigger-translate") handleTranslate();
 });
 
 async function handleTranslate(): Promise<void> {
+  console.log("[Tran] handleTranslate called");
+
   // If already translating, abort and rollback
   if (isTranslating) {
+    console.log("[Tran] Already translating, aborting");
     abortAndRollback();
     return;
   }
 
   const el = document.activeElement as HTMLElement;
-  if (!el) return;
+  if (!el) {
+    console.log("[Tran] No active element");
+    return;
+  }
 
   // Check: is it a supported input element?
   const isInput = el instanceof HTMLInputElement && el.type !== "password";
   const isTextarea = el instanceof HTMLTextAreaElement;
   const isEditable = el.isContentEditable;
-  if (!isInput && !isTextarea && !isEditable) return;
+  console.log("[Tran] Element check:", { isInput, isTextarea, isEditable, tagName: el.tagName });
+  if (!isInput && !isTextarea && !isEditable) {
+    console.log("[Tran] Not a supported input element");
+    return;
+  }
 
   const config = await loadConfig();
+  console.log("[Tran] Config loaded:", { hasApiKey: !!config.apiKey, apiBaseUrl: config.apiBaseUrl });
   if (!config.apiKey) {
     showToast("请先配置 API Key，点击前往设置", {
       clickable: true,
@@ -61,39 +77,65 @@ async function handleTranslate(): Promise<void> {
     snapshot = { element: el, text: inputEl.value, range: r };
   } else {
     const result = getContentEditableText(config.maxChars);
-    if (!result) return;
+    if (!result) {
+      console.log("[Tran] Failed to get contenteditable text");
+      return;
+    }
     text = result.text;
     range = result.range;
     snapshot = { element: el, text: el.innerHTML, range: result.range };
   }
 
-  if (!text.trim()) return;
+  console.log("[Tran] Extracted text:", { length: text.length, text: text.substring(0, 50) });
+  if (!text.trim()) {
+    console.log("[Tran] Empty text, aborting");
+    return;
+  }
 
   // Start translation
   isTranslating = true;
+  console.log("[Tran] Starting translation, isEditable:", isEditable);
   showOverlay(el);
-  setupInputInterruptListener(el);
+
+  // Only set up input interrupt for native inputs (not contenteditable)
+  if (!isEditable) {
+    setupInputInterruptListener(el);
+  }
 
   activePort = browser.runtime.connect({ name: PORT_NAME });
+  console.log("[Tran] Port connected");
   let lastUpdate = 0;
   let pendingContent = "";
 
   activePort.onMessage.addListener((msg: any) => {
+    console.log("[Tran] Received message:", msg.type);
     if (msg.type === "chunk") {
       pendingContent = msg.content;
-      const now = Date.now();
-      if (now - lastUpdate >= THROTTLE_MS) {
-        applyReplacement(el, range, pendingContent, isEditable);
-        lastUpdate = now;
+      // For contenteditable, skip streaming — apply only on complete
+      if (!isEditable) {
+        const now = Date.now();
+        if (pendingContent && now - lastUpdate >= THROTTLE_MS) {
+          applyInputReplacement(el, range, pendingContent);
+          lastUpdate = now;
+        }
       }
     } else if (msg.type === "complete") {
-      // Final flush
+      console.log("[Tran] Translation complete");
       if (pendingContent) {
-        applyReplacement(el, range, pendingContent, isEditable);
+        if (isEditable) {
+          const result = attemptContentEditableReplacement(el, range as Range, pendingContent);
+          if (!result.success) {
+            console.log("[Tran] Contenteditable replacement unavailable:", result.reason);
+            showCopyFallback(pendingContent, el, range as Range, result.reason);
+          }
+        } else {
+          applyInputReplacement(el, range, pendingContent);
+        }
       }
       cleanup();
     } else if (msg.type === "error") {
-      rollback();
+      console.error("[Tran] Translation error:", msg.message, msg.code);
+      if (!isEditable) rollback();
       showToast(msg.message, {
         clickable: msg.code === "no_api_key",
         onClick: msg.code === "no_api_key"
@@ -104,33 +146,80 @@ async function handleTranslate(): Promise<void> {
     }
   });
 
-  activePort.onDisconnect.addListener(() => cleanup());
+  activePort.onDisconnect.addListener(() => {
+    console.log("[Tran] Port disconnected");
+    cleanup();
+  });
 
   const request: TranslateRequest = { type: "translate", text, config };
+  console.log("[Tran] Sending translate request");
   activePort.postMessage(request);
 }
 
-function applyReplacement(
-  el: HTMLElement, range: any, newText: string, isEditable: boolean
+function applyInputReplacement(
+  el: HTMLElement, range: any, newText: string
 ): void {
-  if (isEditable) {
-    try {
-      replaceContentEditableText(range as Range, newText);
-    } catch {
-      // Fallback: show copy panel
-      showCopyFallback(newText);
-      cleanup();
-    }
-  } else {
+  console.log("[Tran] Applying input replacement:", { textLength: newText.length });
+  isApplyingReplacement = true;
+  try {
     const inputEl = el as HTMLInputElement | HTMLTextAreaElement;
     replaceInputText(inputEl, range as TextRange, newText);
-    // Update range end for next chunk
     range.end = range.start + newText.length;
+  } finally {
+    setTimeout(() => { isApplyingReplacement = false; }, 0);
   }
 }
 
-function showCopyFallback(text: string): void {
+function getPasteShortcut(): string {
+  return /Mac|iPhone|iPad|iPod/i.test(navigator.platform) ? "Cmd+V" : "Ctrl+V";
+}
+
+async function tryCopyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (err) {
+    console.warn("[Tran] Clipboard write failed:", err);
+    return false;
+  }
+}
+
+function prepareContentEditableForPaste(
+  targetEl: HTMLElement,
+  originalRange: Range
+): boolean {
+  if (!targetEl.isContentEditable) return false;
+  targetEl.focus();
+  const sel = window.getSelection();
+  if (!sel) return false;
+
+  const candidate = originalRange.cloneRange();
+  const start = candidate.startContainer;
+  const end = candidate.endContainer;
+  const hasValidRange = start.isConnected && end.isConnected
+    && targetEl.contains(start) && targetEl.contains(end);
+
+  sel.removeAllRanges();
+  if (hasValidRange) {
+    sel.addRange(candidate);
+    return true;
+  }
+
+  const fullRange = document.createRange();
+  fullRange.selectNodeContents(targetEl);
+  sel.addRange(fullRange);
+  return true;
+}
+
+function showCopyFallback(
+  text: string,
+  targetEl: HTMLElement,
+  originalRange: Range,
+  reason?: string
+): void {
   removeOverlay();
+  const pasteShortcut = getPasteShortcut();
+  const selected = prepareContentEditableForPaste(targetEl, originalRange);
   const panel = document.createElement("div");
   panel.setAttribute("style", `
     position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -142,12 +231,31 @@ function showCopyFallback(text: string): void {
   const pre = document.createElement("pre");
   pre.textContent = text;
   pre.style.cssText = "white-space: pre-wrap; margin: 0 0 10px 0;";
+
+  const guidance = document.createElement("div");
+  guidance.style.cssText = "margin: 0 0 10px 0; color: #666;";
+  guidance.textContent = selected
+    ? `已选中原文。建议直接按 ${pasteShortcut} 覆盖。`
+    : `请先选中原文，再按 ${pasteShortcut} 粘贴译文。`;
+
+  if (reason) {
+    const note = document.createElement("div");
+    note.textContent = `当前编辑器不支持安全自动替换（${reason}）。`;
+    note.style.cssText = "margin: 0 0 10px 0; color: #666;";
+    panel.appendChild(note);
+  }
+
+  panel.append(guidance);
   const btn = document.createElement("button");
-  btn.textContent = "复制译文";
+  btn.textContent = "复制并重新选中";
   btn.style.cssText = "padding: 6px 14px; border: none; border-radius: 4px; background: #4CAF50; color: #fff; cursor: pointer;";
-  btn.onclick = () => {
-    navigator.clipboard.writeText(text);
-    panel.remove();
+  btn.onclick = async () => {
+    const copied = await tryCopyText(text);
+    const reselectionOk = prepareContentEditableForPaste(targetEl, originalRange);
+    guidance.textContent = copied
+      ? `已复制并${reselectionOk ? "选中原文" : "聚焦输入框"}，按 ${pasteShortcut} 覆盖。`
+      : `复制失败，请手动复制后按 ${pasteShortcut}。`;
+    if (copied) panel.remove();
   };
   const closeBtn = document.createElement("button");
   closeBtn.textContent = "关闭";
@@ -155,13 +263,21 @@ function showCopyFallback(text: string): void {
   closeBtn.onclick = () => panel.remove();
   panel.append(pre, btn, closeBtn);
   document.body.appendChild(panel);
+
+  void tryCopyText(text).then((copied) => {
+    if (!copied) return;
+    guidance.textContent = selected
+      ? `已自动复制并选中原文，直接按 ${pasteShortcut} 覆盖。`
+      : `已自动复制。请先选中原文，再按 ${pasteShortcut} 覆盖。`;
+  });
 }
 
 let inputListener: (() => void) | null = null;
 
 function setupInputInterruptListener(el: HTMLElement): void {
   const handler = () => {
-    if (isComposing) return; // Ignore composition events
+    if (isComposing || isApplyingReplacement) return;
+    console.log("[Tran] User input detected, aborting translation");
     abortAndRollback();
   };
   el.addEventListener("input", handler);
@@ -170,7 +286,6 @@ function setupInputInterruptListener(el: HTMLElement): void {
 
 function abortAndRollback(): void {
   activePort?.disconnect();
-  // Remove input listener BEFORE rollback to prevent infinite recursion
   if (inputListener) {
     inputListener();
     inputListener = null;
@@ -185,9 +300,8 @@ function rollback(): void {
   if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
     element.value = text;
     element.dispatchEvent(new Event("input", { bubbles: true }));
-  } else if (element.isContentEditable) {
-    element.innerHTML = text;
   }
+  // No rollback for contenteditable — we use copy fallback instead
 }
 
 function cleanup(): void {
