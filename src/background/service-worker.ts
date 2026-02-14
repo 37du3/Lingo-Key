@@ -23,6 +23,14 @@ browser.runtime.onConnect.addListener((port) => {
   if (port.name !== PORT_NAME) return;
 
   let abortController: AbortController | null = null;
+  const safePostMessage = (message: PortMessage): boolean => {
+    try {
+      port.postMessage(message);
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   port.onMessage.addListener(async (rawMsg: unknown) => {
     if (typeof rawMsg !== "object" || rawMsg === null || (rawMsg as { type?: string }).type !== "translate") {
@@ -45,7 +53,7 @@ browser.runtime.onConnect.addListener((port) => {
           message: "请先配置 API Key",
           code: "no_api_key",
         };
-        port.postMessage(errorMsg);
+        safePostMessage(errorMsg);
         return;
       }
 
@@ -57,10 +65,8 @@ browser.runtime.onConnect.addListener((port) => {
       )) {
         chunkCount++;
         console.log("[Service Worker] Chunk", chunkCount, "length:", accumulated.length);
-        try {
-          const chunk: PortMessage = { type: "chunk", content: accumulated };
-          port.postMessage(chunk);
-        } catch (err) {
+        const chunk: PortMessage = { type: "chunk", content: accumulated };
+        if (!safePostMessage(chunk)) {
           // Port disconnected (page in bfcache or closed)
           console.log("[Service Worker] Port disconnected during streaming");
           abortController?.abort();
@@ -69,24 +75,20 @@ browser.runtime.onConnect.addListener((port) => {
       }
 
       console.log("[Service Worker] Translation complete, total chunks:", chunkCount);
-      try {
-        const complete: PortMessage = { type: "complete" };
-        port.postMessage(complete);
-      } catch (err) {
+      const complete: PortMessage = { type: "complete" };
+      if (!safePostMessage(complete)) {
         // Port already disconnected
         console.log("[Service Worker] Port disconnected before sending complete");
       }
     } catch (err: any) {
       if (err.name === "AbortError") return;
       console.error("[Service Worker] Translation error:", err);
-      try {
-        const errorMsg: PortMessage = {
-          type: "error",
-          message: err.message || "翻译失败",
-          code: err.message?.includes("API Key") ? "invalid_api_key" : "unknown",
-        };
-        port.postMessage(errorMsg);
-      } catch {
+      const errorMsg: PortMessage = {
+        type: "error",
+        message: err.message || "翻译失败",
+        code: err.message?.includes("API Key") ? "invalid_api_key" : "unknown",
+      };
+      if (!safePostMessage(errorMsg)) {
         // Port already disconnected
         console.log("[Service Worker] Port disconnected before sending error");
       }

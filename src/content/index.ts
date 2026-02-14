@@ -173,7 +173,12 @@ async function handleTranslate(): Promise<void> {
 
   const request: TranslateRequest = { type: "translate", text, config };
   console.log("[Tran] Sending translate request");
-  activePort.postMessage(request);
+  try {
+    activePort.postMessage(request);
+  } catch (err) {
+    console.warn("[Tran] Failed to send translate request:", err);
+    cleanup();
+  }
 }
 
 function applyInputReplacement(
