@@ -7,67 +7,79 @@
   <link rel="stylesheet" href="./options.css" />
 </head>
 <body>
-  <div class="container">
+  <div class="container" id="options-root">
     <h1>Tran Settings</h1>
 
-    <!-- Quick Start -->
-    <div id="quick-start" class="card info">
-      <h3>Quick Start</h3>
-      <p>Configure your API to get started. Get an API key from
-        <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI</a> or
-        <a href="https://platform.deepseek.com/api_keys" target="_blank">DeepSeek</a>.
-      </p>
-      <p class="privacy-note">Your data is sent directly to the API you configure. No intermediate servers.</p>
-    </div>
+    <nav class="tabs" role="tablist" aria-label="Settings sections">
+      <button type="button" class="tab is-active" role="tab" aria-selected="true" aria-controls="panel-api" id="tab-api" data-tab="api">API</button>
+      <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="panel-translation" id="tab-translation" data-tab="translation">Translation</button>
+      <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="panel-shortcut" id="tab-shortcut" data-tab="shortcut">Shortcut</button>
+    </nav>
 
-    <!-- API Config -->
-    <section class="card">
-      <h2>API Configuration</h2>
-      <label>API Base URL
-        <input type="text" id="apiBaseUrl" placeholder="https://api.openai.com/v1" />
-      </label>
-      <label>API Key
-        <div class="password-field">
-          <input type="password" id="apiKey" placeholder="sk-..." />
-          <button type="button" id="toggleKey">Show</button>
-        </div>
-      </label>
-      <label>Model
-        <input type="text" id="model" placeholder="gpt-4o" />
-      </label>
-      <button type="button" id="testConnection">Test Connection</button>
-      <span id="testResult"></span>
+    <section class="tab-panel" id="panel-api" role="tabpanel" aria-labelledby="tab-api" data-panel="api">
+      <div id="quick-start" class="card info">
+        <h3>Quick Start</h3>
+        <p>Configure your API to get started. Get an API key from
+          <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">OpenAI</a> or
+          <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer">DeepSeek</a>.
+        </p>
+        <p class="privacy-note">Your data is sent directly to the API you configure. No intermediate servers.</p>
+      </div>
+
+      <section class="card">
+        <h2>API Configuration</h2>
+        <label>API Base URL
+          <input type="text" id="apiBaseUrl" placeholder="https://api.openai.com/v1" />
+        </label>
+        <label>API Key
+          <div class="password-field">
+            <input type="password" id="apiKey" placeholder="sk-..." />
+            <button type="button" id="toggleKey">Show</button>
+          </div>
+        </label>
+        <label>Model
+          <input type="text" id="model" placeholder="gpt-4o" />
+        </label>
+        <button type="button" id="testConnection">Test Connection</button>
+        <span id="testResult"></span>
+      </section>
     </section>
 
-    <!-- Translation Config -->
-    <section class="card">
-      <h2>Translation</h2>
-      <label>Target Language
-        <select id="targetLanguage"></select>
-      </label>
-      <label>Prompt Style
-        <select id="promptStyle">
-          <option value="formal">Formal</option>
-          <option value="concise">Concise</option>
-          <option value="casual">Casual</option>
-        </select>
-      </label>
-      <label>Custom Prompt
-        <textarea id="customPrompt" rows="3"></textarea>
-      </label>
-      <label>Max Characters
-        <input type="number" id="maxChars" min="50" max="5000" />
-      </label>
+    <section class="tab-panel" id="panel-translation" role="tabpanel" aria-labelledby="tab-translation" data-panel="translation" hidden>
+      <section class="card">
+        <h2>Translation</h2>
+        <label>Target Language
+          <select id="targetLanguage"></select>
+        </label>
+        <label>Prompt Style
+          <select id="promptStyle">
+            <option value="formal">Formal</option>
+            <option value="concise">Concise</option>
+            <option value="casual">Casual</option>
+          </select>
+        </label>
+        <label>Custom Prompt
+          <textarea id="customPrompt" rows="3"></textarea>
+        </label>
+        <label>Max Characters
+          <input type="number" id="maxChars" min="50" max="5000" />
+        </label>
+      </section>
     </section>
 
-    <!-- Shortcut -->
-    <section class="card">
-      <h2>Shortcut</h2>
-      <p>Current shortcut is managed by Chrome.
-        <a href="chrome://extensions/shortcuts" id="shortcutLink">
-          Change shortcut →
-        </a>
-      </p>
+    <section class="tab-panel" id="panel-shortcut" role="tabpanel" aria-labelledby="tab-shortcut" data-panel="shortcut" hidden>
+      <section class="card">
+        <h2>Shortcut</h2>
+        <p class="shortcut-row">
+          Trigger shortcut:
+          <span class="shortcut-badge" id="currentShortcut">Loading...</span>
+        </p>
+        <label>Press a new shortcut
+          <input type="text" id="shortcutInput" readonly placeholder="Click and press keys..." />
+        </label>
+        <p class="shortcut-help" id="shortcutHelp">Use at least one modifier key (Ctrl/Alt/Shift/Cmd).</p>
+        <button type="button" id="resetShortcut">Reset to default</button>
+      </section>
     </section>
 
     <p class="save-status" id="saveStatus">Settings auto-saved</p>

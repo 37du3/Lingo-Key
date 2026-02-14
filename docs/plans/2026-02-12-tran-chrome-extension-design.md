@@ -67,9 +67,9 @@ API 调用放在 Service Worker 而非 Content Script，因为 Content Script �
 
 ### 快捷键配置
 
-- 使用 `chrome.commands` API 注册快捷键，用户可在 `chrome://extensions/shortcuts` 中统一管理
-- 平台默认值：macOS `Ctrl+Shift+T`，Windows/Linux `Alt+T`（macOS 上 `Alt` 键会产生特殊字符，不可用作快捷键）
-- Options Page 中显示当前快捷键，并提供跳转到 `chrome://extensions/shortcuts` 的引导链接
+- 在 Options Page 内直接录制和保存快捷键组合（至少一个修饰键 + 一个普通键）
+- 平台默认值：macOS `Ctrl+Shift+T`，Windows/Linux `Alt+T`
+- 快捷键配置保存在 `chrome.storage.local`，由 Content Script 在页面中监听触发
 
 ## 首次使用引导
 
@@ -162,6 +162,8 @@ tran/
 3. 配置页明确告知"数据直连用户配置的模型服务，不经过中间服务器"
 
 ## 验收标准
+
+实施验收与进度核对以 `docs/prd-checklist.md` 作为单一检查清单。
 
 ### 场景验收
 

@@ -20,20 +20,20 @@ vi.mock("webextension-polyfill", () => ({
 }));
 
 describe("normalizeBaseUrl", () => {
-  it("removes trailing slash", () => {
-    expect(normalizeBaseUrl("https://api.openai.com/")).toBe("https://api.openai.com");
+  it("appends /v1 when suffix is missing", () => {
+    expect(normalizeBaseUrl("https://api.openai.com")).toBe("https://api.openai.com/v1");
   });
 
-  it("removes trailing /v1", () => {
-    expect(normalizeBaseUrl("https://api.openai.com/v1")).toBe("https://api.openai.com");
+  it("keeps existing /v1 suffix", () => {
+    expect(normalizeBaseUrl("https://api.openai.com/v1")).toBe("https://api.openai.com/v1");
   });
 
-  it("removes trailing /v1/", () => {
-    expect(normalizeBaseUrl("https://api.openai.com/v1/")).toBe("https://api.openai.com");
+  it("normalizes trailing slash and keeps /v1", () => {
+    expect(normalizeBaseUrl("https://api.openai.com/v1/")).toBe("https://api.openai.com/v1");
   });
 
   it("trims whitespace", () => {
-    expect(normalizeBaseUrl("  https://api.openai.com  ")).toBe("https://api.openai.com");
+    expect(normalizeBaseUrl("  https://api.openai.com  ")).toBe("https://api.openai.com/v1");
   });
 
   it("returns empty string for empty input", () => {
@@ -53,11 +53,16 @@ describe("loadConfig", () => {
   });
 
   it("merges stored config with defaults", async () => {
-    mockStorage["tran_config"] = { apiKey: "sk-test", model: "gpt-4" };
+    mockStorage["tran_config"] = {
+      apiKey: "sk-test",
+      model: "gpt-4",
+      apiBaseUrl: "https://api.openai.com",
+    };
     const { loadConfig } = await import("../../src/shared/storage");
     const config = await loadConfig();
     expect(config.apiKey).toBe("sk-test");
     expect(config.model).toBe("gpt-4");
+    expect(config.apiBaseUrl).toBe("https://api.openai.com/v1");
     expect(config.maxChars).toBe(500);
   });
 });

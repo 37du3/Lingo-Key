@@ -324,3 +324,74 @@ This identified the false positive in interrupt detection.
 5. Verify "✨ Translating..." overlay appears and persists
 6. Verify text is replaced with translation
 7. Check console for errors
+
+---
+
+## PRD Gap Closure (2026-02-14)
+
+### 1) Options Page Usability Gap
+
+**Issue**:
+Settings existed but were not organized as a single navigable settings surface.
+
+**Fix**:
+- Converted options into a tabbed single page (`API`, `Translation`, `Shortcut`)
+- Added current shortcut display via `browser.commands.getAll()`
+- Kept shortcut management link to `chrome://extensions/shortcuts`
+
+**Files**:
+- `src/options/options.html`
+- `src/options/options.css`
+- `src/options/options.ts`
+
+### 2) Base URL Contract Mismatch
+
+**Issue**:
+`apiBaseUrl` normalization did not enforce PRD’s `/v1` suffix contract.
+
+**Fix**:
+- `normalizeBaseUrl()` now appends `/v1` when missing
+- `loadConfig()` now normalizes stored values on read for backward compatibility
+
+**Files**:
+- `src/shared/storage.ts`
+
+### 3) Sensitive Log Output Risk
+
+**Issue**:
+Debug logs could include config objects and text snippets.
+
+**Fix**:
+- Added `sanitizeForLog()` and `logDebug()` utility
+- Replaced risky request logs with sanitized payload logging
+- Removed raw extracted text preview logs
+
+**Files**:
+- `src/shared/logger.ts`
+- `src/background/service-worker.ts`
+- `src/content/index.ts`
+
+### 4) Overlay Position Follow-up
+
+**Issue**:
+Translation overlay only positioned once; did not follow scroll/resize.
+
+**Fix**:
+- Added scroll/resize listeners and cleanup on overlay removal
+- Reposition now recalculates against current anchor rect
+
+**Files**:
+- `src/content/overlay.ts`
+
+### 5) Contenteditable Interrupt Policy
+
+**Issue**:
+User input interrupt handling was limited to native input/textarea.
+
+**Fix**:
+- Input interrupt listener now also applies to contenteditable targets
+- Keeps IME composition guard
+- Uses no forced rollback for contenteditable paths
+
+**Files**:
+- `src/content/index.ts`

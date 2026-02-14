@@ -2,6 +2,7 @@ export interface TranConfig {
   apiBaseUrl: string;
   apiKey: string;
   model: string;
+  shortcut: string;
   targetLanguage: string;
   promptStyle: PromptStyle;
   customPrompt: string;

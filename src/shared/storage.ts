@@ -9,7 +9,11 @@ export async function loadConfig(): Promise<TranConfig> {
   if (!result[STORAGE_KEY]) {
     return { ...DEFAULT_CONFIG };
   }
-  return { ...DEFAULT_CONFIG, ...result[STORAGE_KEY] };
+  const merged = { ...DEFAULT_CONFIG, ...result[STORAGE_KEY] };
+  return {
+    ...merged,
+    apiBaseUrl: normalizeBaseUrl(merged.apiBaseUrl),
+  };
 }
 
 export async function saveConfig(config: Partial<TranConfig>): Promise<void> {
@@ -20,9 +24,12 @@ export async function saveConfig(config: Partial<TranConfig>): Promise<void> {
 
 export function normalizeBaseUrl(url: string): string {
   let normalized = url.trim();
+  if (!normalized) return "";
   // Remove trailing slash
   normalized = normalized.replace(/\/+$/, "");
-  // Remove trailing /v1 or /v1/ if present (we add it ourselves)
-  normalized = normalized.replace(/\/v1$/, "");
+  // Ensure /v1 suffix for OpenAI-compatible chat/completions endpoint.
+  if (!normalized.endsWith("/v1")) {
+    normalized = `${normalized}/v1`;
+  }
   return normalized;
 }

@@ -1,14 +1,81 @@
 import { loadConfig, saveConfig, normalizeBaseUrl } from "../shared/storage";
 import { PROMPT_TEMPLATES, TARGET_LANGUAGES, DEFAULT_CONFIG } from "../shared/constants";
 import type { TranConfig, PromptStyle } from "../shared/types";
+import { getConfiguredShortcut, getDefaultTriggerShortcut, shortcutFromKeyboardEvent } from "../shared/shortcut";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+const TAB_IDS = ["api", "translation", "shortcut"] as const;
+type TabId = (typeof TAB_IDS)[number];
+
+export function getShortcutLabel(shortcut?: string): string {
+  return shortcut && shortcut.trim() ? shortcut : "Not set";
+}
+
+export function activateTab(tabId: TabId, root: ParentNode = document): void {
+  TAB_IDS.forEach((id) => {
+    const tab = root.querySelector<HTMLElement>(`.tab[data-tab="${id}"]`);
+    const panel = root.querySelector<HTMLElement>(`.tab-panel[data-panel="${id}"]`);
+    const isActive = id === tabId;
+    if (tab) {
+      tab.classList.toggle("is-active", isActive);
+      tab.setAttribute("aria-selected", isActive ? "true" : "false");
+      tab.tabIndex = isActive ? 0 : -1;
+    }
+    if (panel) {
+      panel.hidden = !isActive;
+    }
+  });
+}
+
+function updateShortcutDisplay(shortcut: string): void {
+  const label = getShortcutLabel(shortcut);
+  $<HTMLElement>("currentShortcut").textContent = label;
+  $<HTMLInputElement>("shortcutInput").value = label;
+}
+
+function setupTabs(): void {
+  document.querySelectorAll<HTMLButtonElement>(".tab[data-tab]").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const tabId = tab.dataset.tab as TabId;
+      if (TAB_IDS.includes(tabId)) activateTab(tabId);
+    });
+  });
+}
+
+function setupShortcutRecorder(): void {
+  const input = $<HTMLInputElement>("shortcutInput");
+  const help = $<HTMLElement>("shortcutHelp");
+
+  input.addEventListener("keydown", async (event) => {
+    event.preventDefault();
+    const shortcut = shortcutFromKeyboardEvent(event);
+    if (!shortcut) {
+      help.textContent = "Invalid shortcut. Use at least one modifier key plus another key.";
+      return;
+    }
+    input.value = shortcut;
+    $<HTMLElement>("currentShortcut").textContent = shortcut;
+    help.textContent = `Saved: ${shortcut}`;
+    await save();
+  });
+
+  $("resetShortcut").addEventListener("click", async () => {
+    const defaultShortcut = getDefaultTriggerShortcut();
+    input.value = defaultShortcut;
+    $<HTMLElement>("currentShortcut").textContent = defaultShortcut;
+    help.textContent = `Reset to default: ${defaultShortcut}`;
+    await save();
+  });
+}
 
 async function init(): Promise<void> {
   const config = await loadConfig();
+  setupTabs();
+  activateTab("api");
 
   // Populate target languages
   const langSelect = $<HTMLSelectElement>("targetLanguage");
+  langSelect.innerHTML = "";
   TARGET_LANGUAGES.forEach((lang) => {
     const opt = document.createElement("option");
     opt.value = lang;
@@ -24,6 +91,7 @@ async function init(): Promise<void> {
   $<HTMLSelectElement>("promptStyle").value = config.promptStyle;
   $<HTMLTextAreaElement>("customPrompt").value = config.customPrompt;
   $<HTMLInputElement>("maxChars").value = String(config.maxChars);
+  updateShortcutDisplay(getConfiguredShortcut(config));
 
   // Auto-save on change
   document.querySelectorAll("input, select, textarea").forEach((el) => {
@@ -51,6 +119,7 @@ async function init(): Promise<void> {
 
   // Test connection
   $("testConnection").addEventListener("click", testConnection);
+  setupShortcutRecorder();
 
   // Hide quick start if already configured
   if (config.apiKey) {
@@ -63,6 +132,7 @@ async function save(): Promise<void> {
     apiBaseUrl: normalizeBaseUrl($<HTMLInputElement>("apiBaseUrl").value),
     apiKey: $<HTMLInputElement>("apiKey").value.trim(),
     model: $<HTMLInputElement>("model").value.trim(),
+    shortcut: $<HTMLInputElement>("shortcutInput").value.trim(),
     targetLanguage: $<HTMLSelectElement>("targetLanguage").value,
     promptStyle: $<HTMLSelectElement>("promptStyle").value as PromptStyle,
     customPrompt: $<HTMLTextAreaElement>("customPrompt").value,
@@ -109,4 +179,6 @@ async function testConnection(): Promise<void> {
   }
 }
 
-init();
+if (document.getElementById("options-root")) {
+  void init();
+}

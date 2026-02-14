@@ -10,6 +10,7 @@ export const DEFAULT_CONFIG: TranConfig = {
   apiBaseUrl: "",
   apiKey: "",
   model: "",
+  shortcut: "",
   targetLanguage: "English",
   promptStyle: "concise",
   customPrompt: PROMPT_TEMPLATES.concise,

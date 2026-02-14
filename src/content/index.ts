@@ -1,6 +1,7 @@
 import browser from "webextension-polyfill";
 import { loadConfig } from "../shared/storage";
 import { PORT_NAME, THROTTLE_MS } from "../shared/constants";
+import { getConfiguredShortcut, getDefaultTriggerShortcut, keyboardEventMatchesShortcut } from "../shared/shortcut";
 import {
   getTextRange, replaceInputText,
   getContentEditableText,
@@ -16,12 +17,32 @@ let activePort: browser.Runtime.Port | null = null;
 let snapshot: { element: HTMLElement; text: string; range: any } | null = null;
 let isComposing = false;
 let isApplyingReplacement = false;
+let configuredShortcut = getDefaultTriggerShortcut();
 
 // Track composition events globally
 document.addEventListener("compositionstart", () => { isComposing = true; });
 document.addEventListener("compositionend", () => { isComposing = false; });
 
 console.log("[Tran] Content script loaded on:", window.location.href);
+
+void loadConfig().then((config) => {
+  configuredShortcut = getConfiguredShortcut(config);
+});
+
+browser.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local") return;
+  if (!changes.tran_config) return;
+  void loadConfig().then((config) => {
+    configuredShortcut = getConfiguredShortcut(config);
+  });
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.isComposing || event.repeat) return;
+  if (!keyboardEventMatchesShortcut(event, configuredShortcut)) return;
+  event.preventDefault();
+  void handleTranslate();
+});
 
 // Listen for translate command from service worker
 browser.runtime.onMessage.addListener((msg: any) => {
@@ -86,7 +107,7 @@ async function handleTranslate(): Promise<void> {
     snapshot = { element: el, text: el.innerHTML, range: result.range };
   }
 
-  console.log("[Tran] Extracted text:", { length: text.length, text: text.substring(0, 50) });
+  console.log("[Tran] Extracted text length:", text.length);
   if (!text.trim()) {
     console.log("[Tran] Empty text, aborting");
     return;
@@ -97,10 +118,7 @@ async function handleTranslate(): Promise<void> {
   console.log("[Tran] Starting translation, isEditable:", isEditable);
   showOverlay(el);
 
-  // Only set up input interrupt for native inputs (not contenteditable)
-  if (!isEditable) {
-    setupInputInterruptListener(el);
-  }
+  setupInputInterruptListener(el);
 
   activePort = browser.runtime.connect({ name: PORT_NAME });
   console.log("[Tran] Port connected");
@@ -123,7 +141,9 @@ async function handleTranslate(): Promise<void> {
       console.log("[Tran] Translation complete");
       if (pendingContent) {
         if (isEditable) {
+          isApplyingReplacement = true;
           const result = attemptContentEditableReplacement(el, range as Range, pendingContent);
+          setTimeout(() => { isApplyingReplacement = false; }, 0);
           if (!result.success) {
             console.log("[Tran] Contenteditable replacement unavailable:", result.reason);
             showCopyFallback(pendingContent, el, range as Range, result.reason);
