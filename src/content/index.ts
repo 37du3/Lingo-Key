@@ -170,6 +170,11 @@ function setupInputInterruptListener(el: HTMLElement): void {
 
 function abortAndRollback(): void {
   activePort?.disconnect();
+  // Remove input listener BEFORE rollback to prevent infinite recursion
+  if (inputListener) {
+    inputListener();
+    inputListener = null;
+  }
   rollback();
   cleanup();
 }
