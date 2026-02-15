@@ -1,4 +1,4 @@
-# Tran - AI Input Translator
+# Lingo-Key - AI Input Translator
 
 Tran is a Chrome Extension that allows you to translate text directly within any input field (input, textarea, contenteditable) on the web using OpenAI-compatible LLM APIs.
 
@@ -14,7 +14,7 @@ Tran is a Chrome Extension that allows you to translate text directly within any
 
 ## Installation
 
-1. Download the latest release (`tran-release.zip`).
+1. Download the latest release (`lingo-key-release.zip`).
 2. Unzip the file.
 3. Open Chrome and navigate to `chrome://extensions/`.
 4. Enable "Developer mode" in the top right.
