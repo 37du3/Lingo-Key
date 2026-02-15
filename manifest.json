@@ -3,18 +3,38 @@
   "name": "Tran",
   "version": "1.0.0",
   "description": "Translate text in input fields using LLM",
-  "permissions": ["storage"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "src/background/service-worker.ts"
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["src/content/index.ts"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "src/content/index.ts"
+      ],
       "run_at": "document_idle",
       "all_frames": true
     }
   ],
-  "options_page": "src/options/options.html"
+  "options_page": "src/options/options.html",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  }
 }
