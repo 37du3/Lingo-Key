@@ -13,3 +13,6 @@ coverage/
 .crush/
 .qwen/
 *.zip
+docs/
+tests/
+CLAUDE.md
